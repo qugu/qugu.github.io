@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>When will my laundry dry?</title>
+    <!-- Include Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            padding-top: 20px;
+        }
+
+        .form-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="form-section">
+            <h1 class="mb-4">When will my laundry dry?</h1>
+            <p>This calculator helps you set the delay on machines (like Spanish Balay washers) where the delay
+                indicates <em>finish time</em> rather than program start. Enter your start time, the program length
+                (default 2.5h), and your return time. Then choose whether you want the wash to be completely finished or
+                already running when you return.</p>
+            <form id="laundryForm">
+                <div class="mb-3">
+                    <label for="startTime" class="form-label">Start Time:</label>
+                    <input type="time" id="startTime" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="programLength" class="form-label">Program Length (hours):</label>
+                    <input type="number" id="programLength" step="0.1" value="2.5" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="returnTime" class="form-label">Return Time:</label>
+                    <input type="time" id="returnTime" class="form-control" required>
+                </div>
+                <fieldset class="mb-3">
+                    <legend class="col-form-label pt-0">Status at Return:</legend>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="status" value="finished" id="finished"
+                            checked>
+                        <label class="form-check-label" for="finished">Finished</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="status" value="running" id="running">
+                        <label class="form-check-label" for="running">Running</label>
+                    </div>
+                </fieldset>
+                <div class="mb-3" id="runningTimeDiv" style="display: none;">
+                    <label for="runningTime" class="form-label">Running Time at Return (hours):</label>
+                    <input type="number" id="runningTime" step="0.1" value="1" class="form-control">
+                </div>
+                <button type="submit" class="btn btn-primary">Calculate Delay</button>
+            </form>
+        </div>
+        <div id="result" class="alert" role="alert" style="display:none;"></div>
+    </div>
+
+    <script>
+        // Toggle the visibility of the running time input based on the chosen status.
+        document.getElementsByName("status").forEach(function (radio) {
+            radio.addEventListener("change", function () {
+                if (document.getElementById("running").checked) {
+                    document.getElementById("runningTimeDiv").style.display = "block";
+                } else {
+                    document.getElementById("runningTimeDiv").style.display = "none";
+                }
+            });
+        });
+
+        // Converts a HH:MM string into a decimal number of hours.
+        function timeToHours(timeStr) {
+            var parts = timeStr.split(":");
+            return parseInt(parts[0], 10) + parseInt(parts[1], 10) / 60;
+        }
+
+        // Converts decimal hours to a HH:MM formatted string.
+        function hoursToTime(hours) {
+            let totalMinutes = Math.round(hours * 60);
+            totalMinutes = totalMinutes % (24 * 60);
+            if (totalMinutes < 0) { totalMinutes += 24 * 60; }
+            let h = Math.floor(totalMinutes / 60);
+            let m = totalMinutes % 60;
+            return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
+        }
+
+        document.getElementById("laundryForm").addEventListener("submit", function (e) {
+            e.preventDefault();
+
+            // Read input values.
+            var startTime = document.getElementById("startTime").value;
+            var programLength = parseFloat(document.getElementById("programLength").value);
+            var returnTime = document.getElementById("returnTime").value;
+            var status = document.querySelector('input[name="status"]:checked').value;
+            var runningTime = (status === "running") ? parseFloat(document.getElementById("runningTime").value) : 0;
+
+            var start = timeToHours(startTime);
+            var ret = timeToHours(returnTime);
+
+            // If return time is before start time, assume it's the next day.
+            if (ret < start) {
+                ret += 24;
+            }
+
+            // Determine the target finish time.
+            var targetFinish = (status === "finished") ? ret : (ret - runningTime + programLength);
+
+            // Calculate the delay.
+            var delay = targetFinish - start;
+
+            // Define allowed range (now 1 to 18 hours).
+            var minDelay = 1;
+            var maxDelay = 18;
+
+            var resultDiv = document.getElementById("result");
+
+            // Validate if the delay is within allowed bounds.
+            if (delay < minDelay || delay > maxDelay) {
+                resultDiv.style.display = "block";
+                resultDiv.className = "alert alert-danger";
+                resultDiv.innerHTML = "Error: Calculated delay (" + delay.toFixed(1) + " hours) is outside the allowed range (" + minDelay + " to " + maxDelay + " hours).";
+                return;
+            }
+
+            // Check if the delay is an integer.
+            if (Math.abs(delay - Math.round(delay)) < 0.001) {
+                resultDiv.style.display = "block";
+                resultDiv.className = "alert alert-success";
+                resultDiv.innerHTML = "Set your delay to <strong>" + Math.round(delay) + " hours</strong>.";
+            } else {
+                // Fractional delay; compute floor and ceiling suggestions.
+                var floorDelay = Math.floor(delay);
+                var ceilDelay = Math.ceil(delay);
+
+                // Calculate the new start time needed for an integer delay.
+                var proposedStartFloor = targetFinish - floorDelay;
+                var proposedStartCeil = targetFinish - ceilDelay;
+
+                var formattedStartFloor = hoursToTime(proposedStartFloor);
+                var formattedStartCeil = hoursToTime(proposedStartCeil);
+
+                resultDiv.style.display = "block";
+                resultDiv.className = "alert alert-warning";
+                resultDiv.innerHTML = "The calculated delay is <strong>" + delay.toFixed(1) + " hours</strong>, but fractional delays are not allowed. " +
+                    "You can adjust your start time so that the delay becomes either <strong>" + floorDelay + " hours</strong> (set your start time to <strong>" + formattedStartFloor + "</strong>) " +
+                    "or <strong>" + ceilDelay + " hours</strong> (set your start time to <strong>" + formattedStartCeil + "</strong>).";
+            }
+        });
+    </script>
+
+    <!-- Include Bootstrap JS (optional for interactive components) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
